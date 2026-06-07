@@ -1,0 +1,64 @@
+services:
+  api-gateway:
+    image: nginx:latest
+    container_name: payment_api_gateway
+    ports:
+      -"80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - transactions-api
+    networks:
+      - payment_network
+
+  transactions-api:
+    build: ./transactions-api
+    container_name: payment_transactions_api
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - transactions_db
+      - message-broker
+    networks:
+      - payment_network
+
+  payment-worker:
+    build: ./payment-worker
+    container_name: payment_processor_worker
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - message-broker
+    networks:
+      - payment_network
+
+    message-broker:
+      image: rabbitmq:3-management
+      container_name: payment_message_broker
+      ports:
+        - "5672:5672"
+        - "15672:15672"
+      networks:
+        - payment_network
+
+  transactions_db:
+    image: postgres:15
+    container_name: payment_transactions_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - payment_network
+networks:
+  payment_network:
+    driver: bridge
+
+volumes:
+  pgdata
