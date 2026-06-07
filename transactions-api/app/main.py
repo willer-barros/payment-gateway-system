@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db_session
 from app.schemas import TransactionReponse, TranscationCreate
 from app.models import TransactionModel
+from app.broker import MessageBroker
 
 
 app = FastAPI(
@@ -10,6 +11,8 @@ app = FastAPI(
     description="API for receiving and orchestrating financial transactions",
     version="1.0.0"
 )
+
+broker = MessageBroker()
 
 @app.post(
     "/v1/transactions",
@@ -31,6 +34,16 @@ async def create_transaction(
         db.add(new_transaction)
         await db.commit()
         await db.refresh(new_transaction)
+
+        event_data = {
+            "transaction_id": new_transaction.id,
+            "account_id": new_transaction.account_id,
+            "amount": new_transaction.amount,
+            "payment_method": new_transaction.payment_method,
+            "status": new_transaction.status
+        }
+
+        broker.pusblish_transaction_event(event_data)
 
         return new_transaction
     except Exception as e:
